@@ -19,14 +19,14 @@ func (pos SourcePos) String() string {
 // PosRange is a range of positions in a source file that indicates
 // the span of some region of source, such as a single token or
 // a sub-tree of the AST.
+// TODO: DELETE
 type PosRange struct {
-	// TODO: these should be methods, backed by unexported fields
-	//  which allows us to change the representation to be more efficient
 	Start, End SourcePos
 }
 
 // Comment represents a single comment in a source file. It indicates
 // the position of the comment and its contents.
+// TODO: DELETE, replace with Comment_
 type Comment struct {
 	// The location of the comment in the source file.
 	PosRange // TODO: don't embed since that makes an exported field
@@ -38,4 +38,3 @@ type Comment struct {
 	// the trailing newline rune in Text.
 	Text string
 }
-

@@ -43,6 +43,7 @@ var _ TerminalNode = (*RuneNode)(nil)
 
 // TokenInfo represents state accumulated by the lexer to associated with a
 // token (aka terminal node).
+// TODO: DELETE, replace with TokenInfo_
 type TokenInfo struct {
 	// The location of the token in the source file.
 	PosRange
