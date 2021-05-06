@@ -7,6 +7,7 @@ import "fmt"
 type FileDeclNode interface {
 	Node
 	GetSyntax() Node
+	NodeInfo(n Node) NodeInfo
 }
 
 var _ FileDeclNode = (*FileNode)(nil)
@@ -16,6 +17,8 @@ var _ FileDeclNode = NoSourceNode{}
 // protobuf source file.
 type FileNode struct {
 	compositeNode
+	fileInfo *FileInfo
+
 	Syntax *SyntaxNode // nil if file has no syntax declaration
 	Decls  []FileElement
 
@@ -31,7 +34,7 @@ type FileNode struct {
 //
 // This function panics if the concrete type of any element of decls is not
 // from this package.
-func NewFileNode(syntax *SyntaxNode, decls []FileElement) *FileNode {
+func NewFileNode(info *FileInfo, syntax *SyntaxNode, decls []FileElement) *FileNode {
 	numChildren := len(decls)
 	if syntax != nil {
 		numChildren++
@@ -57,8 +60,9 @@ func NewFileNode(syntax *SyntaxNode, decls []FileElement) *FileNode {
 		compositeNode: compositeNode{
 			children: children,
 		},
-		Syntax: syntax,
-		Decls:  decls,
+		fileInfo: info,
+		Syntax:   syntax,
+		Decls:    decls,
 	}
 }
 
@@ -68,6 +72,10 @@ func NewEmptyFileNode(filename string) *FileNode {
 			children: []Node{NewNoSourceNode(filename)},
 		},
 	}
+}
+
+func (f *FileNode) NodeInfo(n Node) NodeInfo {
+	return f.fileInfo.NodeInfo(n)
 }
 
 func (f *FileNode) GetSyntax() Node {

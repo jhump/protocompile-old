@@ -26,20 +26,20 @@ type FileInfo struct {
 	// The info for every token in the file. The last item in the slice
 	// corresponds to the EOF, so every file (even an empty one) has at least
 	// one element. This includes all terminal symbols in the AST as well as
-	// all comments.
-	tokens []tokenInfo
+	// all comments. However, it excludes rune nodes (which can be more
+	// compactly represented by an offset into data).
+	tokens []tokenSpan
 }
 
 type commentInfo struct {
-	// the item at this index in the associated FileInfo's tokens slice
-	// indicates the position and size of the comment.
+	// the index of the token, in the file's tokens slice, that represents this
+	// comment
 	index int
-	// the item at this index in the associated FileInfo's tokens slice
-	// indicates the token to which this comment is attributed.
-	attributedToken int
+	// the index of the token to which this comment is attributed.
+	attributedToIndex int
 }
 
-type tokenInfo struct {
+type tokenSpan struct {
 	// the offset into the file of the first character of a token.
 	offset int
 	// the length of the token
@@ -77,7 +77,7 @@ func (f *FileInfo) AddLine(offset int) {
 
 // AddToken adds info about a token at the given location to this file. It
 // returns a value that allows access to all of the token's details.
-func (f *FileInfo) AddToken(offset, length int) TokenInfo_ {
+func (f *FileInfo) AddToken(offset, length int) Token {
 	if offset < 0 {
 		panic(fmt.Sprintf("invalid offset: %d must not be negative", offset))
 	}
@@ -96,11 +96,8 @@ func (f *FileInfo) AddToken(offset, length int) TokenInfo_ {
 		}
 	}
 
-	f.tokens = append(f.tokens, tokenInfo{offset: offset, length: length})
-	return TokenInfo_{
-		fileInfo: f,
-		index:    len(f.tokens) - 1,
-	}
+	f.tokens = append(f.tokens, tokenSpan{offset: offset, length: length})
+	return Token(offset)
 }
 
 // AddComment adds info about a comment to this file. Comments must first be
@@ -109,30 +106,37 @@ func (f *FileInfo) AddToken(offset, length int) TokenInfo_ {
 // file with which the comment is associated. If comment's offset is before that
 // of attributedTo, then this is a leading comment. Otherwise, it is a trailing
 // comment.
-func (f *FileInfo) AddComment(comment, attributedTo TokenInfo_) Comment_ {
-	if comment.fileInfo != f || attributedTo.fileInfo != f {
-		panic(fmt.Sprintf("cannot add comment using token from different *FileInfo"))
-	}
-
+func (f *FileInfo) AddComment(comment, attributedTo Token) Comment {
 	if len(f.comments) > 0 {
 		lastComment := f.comments[len(f.comments)-1]
-		if comment.index <= lastComment.index {
-			panic(fmt.Sprintf("invalid index: %d is not greater than previously observed comment index %d", comment.index, lastComment.index))
-
+		if int(comment) <= lastComment.index {
+			panic(fmt.Sprintf("invalid index: %d is not greater than previously observed comment index %d", comment, lastComment.index))
 		}
-		if attributedTo.index < lastComment.attributedToken {
-			panic(fmt.Sprintf("invalid attribution: %d is not greater than previously observed comment attribution index %d", attributedTo.index, lastComment.attributedToken))
+		if int(attributedTo) < lastComment.attributedToIndex {
+			panic(fmt.Sprintf("invalid attribution: %d is not greater than previously observed comment attribution index %d", attributedTo, lastComment.attributedToIndex))
 		}
 	}
 
-	f.comments = append(f.comments, commentInfo{index: comment.index, attributedToken: attributedTo.index})
-	return Comment_{
+	f.comments = append(f.comments, commentInfo{index: int(comment), attributedToIndex: int(attributedTo)})
+	return Comment{
 		fileInfo: f,
 		index:    len(f.comments) - 1,
 	}
 }
 
-func (f *FileInfo) pos(offset int) SourcePos {
+func (f *FileInfo) NodeInfo(n Node) NodeInfo {
+	return NodeInfo{fileInfo: f, startIndex: int(n.Start()), endIndex: int(n.End())}
+}
+
+func (f *FileInfo) TokenInfo(t Token) NodeInfo {
+	return NodeInfo{fileInfo: f, startIndex: int(t), endIndex: int(t)}
+}
+
+func (f *FileInfo) isDummyFile() bool {
+	return f.lines == nil
+}
+
+func (f *FileInfo) SourcePos(offset int) SourcePos {
 	lineNumber := sort.Search(len(f.lines), func(n int) bool {
 		return f.lines[n] > offset
 	})
@@ -160,56 +164,70 @@ func (f *FileInfo) pos(offset int) SourcePos {
 	}
 }
 
-// TokenInfo represents the details for a single token in a source file. A token
-// is either a comment or a terminal symbol. Tokens corresponding to comments
-// will have no other comments attributed to them (e.g. LeadingComments() and
-// TrailingComments() will return empty values).
-type TokenInfo_ struct {
-	fileInfo *FileInfo
-	index    int
+// Token represents a single lexed token.
+type Token int
+
+func (t Token) asTerminalNode() terminalNode {
+	return terminalNode(t)
 }
 
-func (t *TokenInfo_) Start() SourcePos {
-	tok := t.fileInfo.tokens[t.index]
-	return t.fileInfo.pos(tok.offset)
+// NodeInfo represents the details for a node in the source file's AST.
+type NodeInfo struct {
+	fileInfo             *FileInfo
+	startIndex, endIndex int
 }
 
-func (t *TokenInfo_) End() SourcePos {
-	tok := t.fileInfo.tokens[t.index]
-	return t.fileInfo.pos(tok.offset + tok.length - 1)
+func (n NodeInfo) Start() SourcePos {
+	if n.fileInfo.isDummyFile() {
+		return UnknownPos(n.fileInfo.name)
+	}
+
+	tok := n.fileInfo.tokens[n.startIndex]
+	return n.fileInfo.SourcePos(tok.offset)
 }
 
-func (t *TokenInfo_) LeadingWhitespace() string {
-	tok := t.fileInfo.tokens[t.index]
+func (n NodeInfo) End() SourcePos {
+	if n.fileInfo.isDummyFile() {
+		return UnknownPos(n.fileInfo.name)
+	}
+
+	tok := n.fileInfo.tokens[n.endIndex]
+	return n.fileInfo.SourcePos(tok.offset + tok.length - 1)
+}
+
+func (n NodeInfo) LeadingWhitespace() string {
+	if n.fileInfo.isDummyFile() {
+		return ""
+	}
+
+	tok := n.fileInfo.tokens[n.startIndex]
 	var prevEnd int
-	if t.index > 0 {
-		prevTok := t.fileInfo.tokens[t.index-1]
+	if n.startIndex > 0 {
+		prevTok := n.fileInfo.tokens[n.startIndex-1]
 		prevEnd = prevTok.offset + prevTok.length
 	}
-	return string(t.fileInfo.data[prevEnd:tok.offset])
+	return string(n.fileInfo.data[prevEnd:tok.offset])
 }
 
-func (t *TokenInfo_) RawText() string {
-	tok := t.fileInfo.tokens[t.index]
-	return string(t.fileInfo.data[tok.offset:tok.offset+tok.length])
-}
+func (n NodeInfo) LeadingComments() Comments {
+	if n.fileInfo.isDummyFile() {
+		return Comments{}
+	}
 
-func (t *TokenInfo_) LeadingComments() Comments {
-	start := sort.Search(len(t.fileInfo.comments), func(n int) bool {
-		return t.fileInfo.comments[n].attributedToken >= t.index
+	start := sort.Search(len(n.fileInfo.comments), func(i int) bool {
+		return n.fileInfo.comments[i].attributedToIndex >= n.startIndex
 	})
 
-	if start == len(t.fileInfo.comments) || t.fileInfo.comments[start].attributedToken != t.index {
+	if start == len(n.fileInfo.comments) || n.fileInfo.comments[start].attributedToIndex != n.startIndex {
 		// no comments associated with this token
 		return Comments{}
 	}
 
-	tokOffset := t.fileInfo.tokens[t.index].offset
 	numComments := 0
-	for i := start; i < len(t.fileInfo.comments); i++ {
-		comment := t.fileInfo.comments[i]
-		if comment.attributedToken == t.index &&
-			t.fileInfo.tokens[comment.index].offset < tokOffset {
+	for i := start; i < len(n.fileInfo.comments); i++ {
+		comment := n.fileInfo.comments[i]
+		if comment.attributedToIndex == n.startIndex &&
+			comment.index < n.startIndex {
 			numComments++
 		} else {
 			break
@@ -217,29 +235,32 @@ func (t *TokenInfo_) LeadingComments() Comments {
 	}
 
 	return Comments{
-		fileInfo: t.fileInfo,
+		fileInfo: n.fileInfo,
 		first:    start,
 		num:      numComments,
 	}
 }
 
-func (t *TokenInfo_) TrailingComments() Comments {
-	tokOffset := t.fileInfo.tokens[t.index].offset
-	start := sort.Search(len(t.fileInfo.comments), func(n int) bool {
-		comment := t.fileInfo.comments[n]
-		return comment.attributedToken >= t.index &&
-			t.fileInfo.tokens[comment.index].offset > tokOffset
+func (n NodeInfo) TrailingComments() Comments {
+	if n.fileInfo.isDummyFile() {
+		return Comments{}
+	}
+
+	start := sort.Search(len(n.fileInfo.comments), func(i int) bool {
+		comment := n.fileInfo.comments[i]
+		return comment.attributedToIndex >= n.endIndex &&
+			comment.index > n.endIndex
 	})
 
-	if start == len(t.fileInfo.comments) || t.fileInfo.comments[start].attributedToken != t.index {
+	if start == len(n.fileInfo.comments) || n.fileInfo.comments[start].attributedToIndex != n.endIndex {
 		// no comments associated with this token
 		return Comments{}
 	}
 
 	numComments := 0
-	for i := start; i < len(t.fileInfo.comments); i++ {
-		comment := t.fileInfo.comments[i]
-		if comment.attributedToken == t.index {
+	for i := start; i < len(n.fileInfo.comments); i++ {
+		comment := n.fileInfo.comments[i]
+		if comment.attributedToIndex == n.endIndex {
 			numComments++
 		} else {
 			break
@@ -247,13 +268,34 @@ func (t *TokenInfo_) TrailingComments() Comments {
 	}
 
 	return Comments{
-		fileInfo: t.fileInfo,
+		fileInfo: n.fileInfo,
 		first:    start,
 		num:      numComments,
 	}
 }
 
-// Comments represents a range of comments.
+func (n NodeInfo) RawText() string {
+	startTok := n.fileInfo.tokens[n.startIndex]
+	endTok := n.fileInfo.tokens[n.endIndex]
+	return string(n.fileInfo.data[startTok.offset:endTok.offset+endTok.length])
+}
+
+// SourcePos identifies a location in a proto source file.
+type SourcePos struct {
+	Filename  string
+	Line, Col int
+	Offset    int
+}
+
+func (pos SourcePos) String() string {
+	if pos.Line <= 0 || pos.Col <= 0 {
+		return pos.Filename
+	}
+	return fmt.Sprintf("%s:%d:%d", pos.Filename, pos.Line, pos.Col)
+}
+
+// Comments represents a range of sequential comments in a source file
+// (e.g. no interleaving tokens or AST nodes).
 type Comments struct {
 	fileInfo   *FileInfo
 	first, num int
@@ -263,36 +305,36 @@ func (c Comments) Len() int {
 	return c.num
 }
 
-func (c Comments) Index(i int) Comment_ {
+func (c Comments) Index(i int) Comment {
 	if i < 0 || i >= c.num {
 		panic(fmt.Sprintf("index %d out of range (len = %d)", i, c.num))
 	}
-	return Comment_{
+	return Comment{
 		fileInfo: c.fileInfo,
 		index:    c.first + i,
 	}
 }
 
-// Comment_ represents a single comment in a source file. It indicates
+// Comment represents a single comment in a source file. It indicates
 // the position of the comment and its contents.
-type Comment_ struct {
+type Comment struct {
 	fileInfo *FileInfo
 	index    int
 }
 
-func (c *Comment_) Start() SourcePos {
+func (c *Comment) Start() SourcePos {
 	comment := c.fileInfo.comments[c.index]
 	tok := c.fileInfo.tokens[comment.index]
-	return c.fileInfo.pos(tok.offset)
+	return c.fileInfo.SourcePos(tok.offset)
 }
 
-func (c *Comment_) End() SourcePos {
+func (c *Comment) End() SourcePos {
 	comment := c.fileInfo.comments[c.index]
 	tok := c.fileInfo.tokens[comment.index]
-	return c.fileInfo.pos(tok.offset + tok.length - 1)
+	return c.fileInfo.SourcePos(tok.offset + tok.length - 1)
 }
 
-func (c *Comment_) LeadingWhitespace() string {
+func (c *Comment) LeadingWhitespace() string {
 	comment := c.fileInfo.comments[c.index]
 	tok := c.fileInfo.tokens[comment.index]
 	var prevEnd int
@@ -303,7 +345,7 @@ func (c *Comment_) LeadingWhitespace() string {
 	return string(c.fileInfo.data[prevEnd:tok.offset])
 }
 
-func (c *Comment_) RawText() string {
+func (c *Comment) RawText() string {
 	comment := c.fileInfo.comments[c.index]
 	tok := c.fileInfo.tokens[comment.index]
 	return string(c.fileInfo.data[tok.offset:tok.offset+tok.length])
