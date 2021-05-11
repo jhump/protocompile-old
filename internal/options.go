@@ -9,6 +9,8 @@ import (
 
 type hasOptionNode interface {
 	OptionNode(part *descriptorpb.UninterpretedOption) ast.OptionDeclNode
+	// This is needed to be able to get NodeInfo
+	FileNode() ast.FileDeclNode
 }
 
 func FindOption(res hasOptionNode, handler *reporter.Handler, scope string, opts []*descriptorpb.UninterpretedOption, name string) (int, error) {
@@ -22,7 +24,13 @@ func FindOption(res hasOptionNode, handler *reporter.Handler, scope string, opts
 		}
 		if found >= 0 {
 			optNode := res.OptionNode(opt)
-			return -1, handler.HandleErrorf(optNode.GetName().Start(), "%s: option %s cannot be defined more than once", scope, name)
+			fn := res.FileNode()
+			if fn == nil {
+				return -1, handler.HandleErrorf(ast.UnknownPos("unknownfile"), "%s: option %s cannot be defined more than once", scope, name)
+			}
+			node := optNode.GetName()
+			nodeInfo := fn.NodeInfo(node)
+			return -1, handler.HandleErrorf(nodeInfo.Start(), "%s: option %s cannot be defined more than once", scope, name)
 		}
 		found = i
 	}

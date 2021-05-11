@@ -35,6 +35,7 @@ func (rr *runeReader) readRune() (r rune, size int, err error) {
 		rr.err = fmt.Errorf("invalid UTF8 at offset %d: %x", rr.pos, rr.data[rr.pos])
 		return 0, 0, rr.err
 	}
+	rr.pos = rr.pos + sz
 	return r, sz, nil
 }
 
@@ -69,7 +70,7 @@ type protoLex struct {
 
 	prevSym    ast.TerminalNode
 	prevOffset int
-	eof        ast.Token
+	eof        *ast.EOFNode
 
 	comments []ast.Token
 }
@@ -143,7 +144,7 @@ var keywords = map[string]int{
 
 func (l *protoLex) maybeNewLine(r rune, sz int) {
 	if r == '\n' {
-		l.info.AddLine(l.input.offset()-sz)
+		l.info.AddLine(l.input.offset() - sz)
 	}
 }
 
@@ -168,7 +169,7 @@ func (l *protoLex) Lex(lval *protoSymType) int {
 			// accumulated comments as a trailing comment on last symbol
 			// (if appropriate)
 			l.setRune(lval, 0)
-			l.eof = lval.b.Token()
+			l.eof = ast.NewEOFNode(lval.b.Token())
 			return 0
 		} else if err != nil {
 			l.setError(lval, err)
@@ -235,9 +236,15 @@ func (l *protoLex) Lex(lval *protoSymType) int {
 					}
 					if (cnn >= '0' && cnn <= '9') || (cnn >= 'a' && cnn <= 'f') || (cnn >= 'A' && cnn <= 'F') {
 						// hexadecimal!
+						// This is a bit odd, because we've read the first digit but not unread it.
+						// This means that l.readHexNumber might not actually read any more runes
+						// for example 0x9, but that's fine because `l.input.getMark` will still give
+						// us the entire token.
 						l.readHexNumber()
 						token := l.input.getMark()
-						ui, err := strconv.ParseUint(string(token), 16, 64)
+						// this will be the whole token, including the `0[xX]` so we need to drop
+						// that prefix for ParseUint
+						ui, err := strconv.ParseUint(string(token[2:]), 16, 64)
 						if err != nil {
 							l.setError(lval, err)
 							return _ERROR
@@ -245,7 +252,7 @@ func (l *protoLex) Lex(lval *protoSymType) int {
 						l.setInt(lval, ui)
 						return _INT_LIT
 					}
-					l.input.unreadRune(sznn+szn)
+					l.input.unreadRune(sznn + szn)
 					l.setInt(lval, 0)
 					return _INT_LIT
 				} else {
@@ -324,7 +331,7 @@ func (l *protoLex) Lex(lval *protoSymType) int {
 
 func (l *protoLex) newToken() ast.Token {
 	offset := l.input.mark
-	length := l.input.pos-l.input.mark
+	length := l.input.pos - l.input.mark
 	return l.info.AddToken(offset, length)
 }
 
@@ -477,16 +484,16 @@ func (l *protoLex) readNumber(allowDot bool, allowExp bool) {
 			if cn == '-' || cn == '+' {
 				cnn, sznn, err := l.input.readRune()
 				if err != nil {
-					l.input.unreadRune(szn+sz)
+					l.input.unreadRune(szn + sz)
 					break
 				}
 				if cnn < '0' || cnn > '9' {
-					l.input.unreadRune(sznn+szn+sz)
+					l.input.unreadRune(sznn + szn + sz)
 					break
 				}
 				c, cn = cn, cnn
 			} else if cn < '0' || cn > '9' {
-				l.input.unreadRune(szn+sz)
+				l.input.unreadRune(szn + sz)
 				break
 			}
 			c = cn

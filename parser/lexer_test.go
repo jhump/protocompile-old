@@ -1,17 +1,19 @@
 package parser
 
 import (
-	"github.com/jhump/protocompile/reporter"
-	"github.com/stretchr/testify/assert"
 	"io"
 	"strings"
 	"testing"
+
+	"github.com/jhump/protocompile/reporter"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/jhump/protocompile/ast"
 )
 
 func TestLexer(t *testing.T) {
-	l := newTestLexer(strings.NewReader(`
+	l := newTestLexer(t, strings.NewReader(`
 	// comment
 
 	/*
@@ -88,11 +90,11 @@ foo
 		comments   []string
 		trailCount int
 	}{
-		{t: _INT32, line: 8, col: 9, span: 5, v: "int32", comments: []string{"// comment\n", "/*\n\t * block comment\n\t */", "/* inline comment */"}},
+		{t: _INT32, line: 8, col: 9, span: 5, v: "int32", comments: []string{"// comment", "/*\n\t * block comment\n\t */", "/* inline comment */"}},
 		{t: _STRING_LIT, line: 8, col: 16, span: 25, v: "\032\x16\n\rfoobar\"zap"},
 		{t: _STRING_LIT, line: 8, col: 57, span: 22, v: "another\tstring's\t"},
 		{t: _NAME, line: 9, col: 1, span: 3, v: "foo"},
-		{t: _SERVICE, line: 14, col: 9, span: 7, v: "service", comments: []string{"// another comment\n", "// more and more...\n"}},
+		{t: _SERVICE, line: 14, col: 9, span: 7, v: "service", comments: []string{"// another comment", "// more and more..."}},
 		{t: _RPC, line: 14, col: 17, span: 3, v: "rpc"},
 		{t: _MESSAGE, line: 14, col: 21, span: 7, v: "message"},
 		{t: '.', line: 15, col: 9, span: 1},
@@ -143,7 +145,7 @@ foo
 		{t: '=', line: 41, col: 16, span: 1, v: nil},
 		{t: _STRING_LIT, line: 41, col: 18, span: 8, v: "proto2"},
 		{t: ';', line: 41, col: 26, span: 1, v: nil},
-		{t: _FLOAT_LIT, line: 44, col: 9, span: 5, v: 1.543, comments: []string{"// some strange cases\n"}},
+		{t: _FLOAT_LIT, line: 44, col: 9, span: 5, v: 1.543, comments: []string{"// some strange cases"}},
 		{t: _NAME, line: 44, col: 14, span: 3, v: "g12"},
 		{t: _FLOAT_LIT, line: 45, col: 9, span: 7, v: 0.0, comments: []string{"/* trailing line comment */"}, trailCount: 1},
 		{t: _FLOAT_LIT, line: 46, col: 9, span: 6, v: 0.1234},
@@ -181,28 +183,33 @@ foo
 			n = sym.b
 			val = nil
 		}
-		if !assert.Equal(t, exp.t, tok, "case %d: wrong token type (case %v)", i, exp.v) {
+		if !assert.Equal(t, exp.t, tok, "case %d: wrong token type (case %+v)", i, exp.t) {
 			break
 		}
 		if !assert.Equal(t, exp.v, val, "case %d: wrong token value", i) {
 			break
 		}
-		assert.Equal(t, exp.line, n.Start().Line, "case %d: wrong line number", i)
-		assert.Equal(t, exp.col, n.Start().Col, "case %d: wrong column number", i)
-		assert.Equal(t, exp.line, n.End().Line, "case %d: wrong end line number", i)
-		assert.Equal(t, exp.col+exp.span, n.End().Col, "case %d: wrong end column number", i)
-		if exp.trailCount > 0 {
-			assert.Equal(t, exp.trailCount, len(prev.TrailingComments()), "case %d: wrong number of trailing comments", i)
+		nodeInfo := l.info.NodeInfo(n)
+		var prevNodeInfo ast.NodeInfo
+		if prev != nil {
+			prevNodeInfo = l.info.NodeInfo(prev)
 		}
-		assert.Equal(t, len(exp.comments)-exp.trailCount, len(n.LeadingComments()), "case %d: wrong number of comments", i)
+		assert.Equal(t, exp.line, nodeInfo.Start().Line, "case %d: wrong line number", i)
+		assert.Equal(t, exp.col, nodeInfo.Start().Col, "case %d: wrong column number", i)
+		assert.Equal(t, exp.line, nodeInfo.End().Line, "case %d: wrong end line number", i)
+		assert.Equal(t, exp.col+exp.span, nodeInfo.End().Col, "case %d: wrong end column number", i)
+		if exp.trailCount > 0 {
+			assert.Equal(t, exp.trailCount, prevNodeInfo.TrailingComments().Len(), "case %d: wrong number of trailing comments", i)
+		}
+		assert.Equal(t, len(exp.comments)-exp.trailCount, nodeInfo.LeadingComments().Len(), "case %d: wrong number of comments", i)
 		for ci := range exp.comments {
-			var c ast.Comment
+			var c *ast.Comment
 			if ci < exp.trailCount {
-				c = prev.TrailingComments()[ci]
+				c = prevNodeInfo.TrailingComments().Index(ci)
 			} else {
-				c = n.LeadingComments()[ci-exp.trailCount]
+				c = nodeInfo.LeadingComments().Index(ci - exp.trailCount)
 			}
-			assert.Equal(t, exp.comments[ci], c.Text, "case %d, comment #%d: unexpected text", i, ci+1)
+			assert.Equal(t, exp.comments[ci], c.RawText(), "case %d, comment #%d: unexpected text", i, ci+1)
 		}
 		prev = n
 	}
@@ -211,13 +218,15 @@ foo
 	}
 	// Now we check final state of lexer for unattached comments and final whitespace
 	// One of the final comments get associated as trailing comment for final token
-	assert.Equal(t, 1, len(prev.TrailingComments()), "last token: wrong number of trailing comments")
-	finalComments := l.eof.LeadingComments()
-	if assert.Equal(t, 2, len(finalComments), "wrong number of final remaining comments") {
-		assert.Equal(t, "// comment attached to no tokens (upcoming token is EOF!)\n", finalComments[0].Text, "incorrect final comment text")
-		assert.Equal(t, "/* another comment followed by some final whitespace*/", finalComments[1].Text, "incorrect final comment text")
+	prevNodeInfo := l.info.NodeInfo(prev)
+	assert.Equal(t, 1, prevNodeInfo.TrailingComments().Len(), "last token: wrong number of trailing comments")
+	eofNodeInfo := l.info.NodeInfo(l.eof)
+	finalComments := eofNodeInfo.LeadingComments()
+	if assert.Equal(t, 2, finalComments.Len(), "wrong number of final remaining comments") {
+		assert.Equal(t, "// comment attached to no tokens (upcoming token is EOF!)\n", finalComments.Index(0).RawText(), "incorrect final comment text")
+		assert.Equal(t, "/* another comment followed by some final whitespace*/", finalComments.Index(1).RawText(), "incorrect final comment text")
 	}
-	assert.Equal(t, "\n\n\t\n\t", l.eof.LeadingWhitespace(), "incorrect final whitespace")
+	assert.Equal(t, "\n\n\t\n\t", eofNodeInfo.LeadingWhitespace(), "incorrect final whitespace")
 }
 
 func TestLexerErrors(t *testing.T) {
@@ -237,7 +246,7 @@ func TestLexerErrors(t *testing.T) {
 		{str: `/* foobar`, errMsg: "unexpected EOF"},
 	}
 	for i, tc := range testCases {
-		l := newTestLexer(strings.NewReader(tc.str))
+		l := newTestLexer(t, strings.NewReader(tc.str))
 		var sym protoSymType
 		tok := l.Lex(&sym)
 		if assert.Equal(t, _ERROR, tok) {
@@ -247,6 +256,11 @@ func TestLexerErrors(t *testing.T) {
 	}
 }
 
-func newTestLexer(in io.Reader) *protoLex {
-	return newLexer(in, "test.proto", reporter.NewHandler(nil))
+func newTestLexer(t *testing.T, in io.Reader) *protoLex {
+	r := &testReporter{
+		t: t,
+	}
+	lexer, err := newLexer(in, "test.proto", reporter.NewHandler(r))
+	require.NoError(t, err)
+	return lexer
 }
