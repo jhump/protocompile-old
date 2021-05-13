@@ -197,7 +197,13 @@ func (n NodeInfo) End() SourcePos {
 	}
 
 	tok := n.fileInfo.tokens[n.endIndex]
-	return n.fileInfo.SourcePos(tok.offset + tok.length - 1)
+	// we need to give SourcePos our "column" -1 to ensure that
+	// it calculates the correct line (otherwise for comments which include
+	// the newline character the offset would be on the next line). However
+	// the expected SourceCodeInfo requires the end column to be `tok.offset + tok.length`
+	pos := n.fileInfo.SourcePos(tok.offset + tok.length - 1)
+	pos.Col = pos.Col + 1
+	return pos
 }
 
 func (n NodeInfo) LeadingWhitespace() string {
