@@ -67,10 +67,14 @@ func NewFileNode(info *FileInfo, syntax *SyntaxNode, decls []FileElement) *FileN
 }
 
 func NewEmptyFileNode(filename string) *FileNode {
+	fileInfo := NewFileInfo(filename, []byte{})
+	fileInfo.AddToken(0, 0) // EOF
+
 	return &FileNode{
 		compositeNode: compositeNode{
 			children: []Node{NewNoSourceNode(filename)},
 		},
+		fileInfo: fileInfo,
 	}
 }
 

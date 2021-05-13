@@ -59,8 +59,8 @@ func (f *FileInfo) Name() string {
 	return f.name
 }
 
-// AddLine adds the offset of a new line in the file. As the lexer encounters
-// newlines, it should call this method with the offset of the newline character.
+// AddLine adds the offset representing the beginning of the "next" line in the file.
+// The first line always starts at offset 0, the second line starts at offset-of-newline-char+1.
 func (f *FileInfo) AddLine(offset int) {
 	if offset < 0 {
 		panic(fmt.Sprintf("invalid offset: %d must not be negative", offset))
@@ -68,10 +68,6 @@ func (f *FileInfo) AddLine(offset int) {
 	if offset > len(f.data) {
 		panic(fmt.Sprintf("invalid offset: %d is greater than file size %d", offset, len(f.data)))
 	}
-	// f.lines tracks the starting offset of the nth line, which means we need to account for the width of the
-	// newline sequence that ends the n-1th line.
-	// TODO: this isn't valid for windows line endings
-	offset = offset + 1
 
 	if len(f.lines) > 0 {
 		lastOffset := f.lines[len(f.lines)-1]
@@ -201,7 +197,7 @@ func (n NodeInfo) End() SourcePos {
 	}
 
 	tok := n.fileInfo.tokens[n.endIndex]
-	return n.fileInfo.SourcePos(tok.offset + tok.length)
+	return n.fileInfo.SourcePos(tok.offset + tok.length - 1)
 }
 
 func (n NodeInfo) LeadingWhitespace() string {
@@ -314,11 +310,11 @@ func (c Comments) Len() int {
 	return c.num
 }
 
-func (c Comments) Index(i int) *Comment {
+func (c Comments) Index(i int) Comment {
 	if i < 0 || i >= c.num {
 		panic(fmt.Sprintf("index %d out of range (len = %d)", i, c.num))
 	}
-	return &Comment{
+	return Comment{
 		fileInfo: c.fileInfo,
 		index:    c.first + i,
 	}
@@ -331,19 +327,19 @@ type Comment struct {
 	index    int
 }
 
-func (c *Comment) Start() SourcePos {
+func (c Comment) Start() SourcePos {
 	comment := c.fileInfo.comments[c.index]
 	tok := c.fileInfo.tokens[comment.index]
 	return c.fileInfo.SourcePos(tok.offset)
 }
 
-func (c *Comment) End() SourcePos {
+func (c Comment) End() SourcePos {
 	comment := c.fileInfo.comments[c.index]
 	tok := c.fileInfo.tokens[comment.index]
 	return c.fileInfo.SourcePos(tok.offset + tok.length - 1)
 }
 
-func (c *Comment) LeadingWhitespace() string {
+func (c Comment) LeadingWhitespace() string {
 	comment := c.fileInfo.comments[c.index]
 	tok := c.fileInfo.tokens[comment.index]
 	var prevEnd int
@@ -354,7 +350,7 @@ func (c *Comment) LeadingWhitespace() string {
 	return string(c.fileInfo.data[prevEnd:tok.offset])
 }
 
-func (c *Comment) RawText() string {
+func (c Comment) RawText() string {
 	comment := c.fileInfo.comments[c.index]
 	tok := c.fileInfo.tokens[comment.index]
 	return string(c.fileInfo.data[tok.offset : tok.offset+tok.length])

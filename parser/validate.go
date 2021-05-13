@@ -279,7 +279,7 @@ func validateEnum(res *result, isProto3 bool, name protoreflect.FullName, ed *de
 		// check reserved ranges
 		r := sort.Search(len(rsvd), func(index int) bool { return rsvd[index].end >= ev.GetNumber() })
 		if r < len(rsvd) && rsvd[r].start <= ev.GetNumber() {
-			enumValNodeInfo := res.file.NodeInfo(evn.GetName())
+			enumValNodeInfo := res.file.NodeInfo(evn.GetNumber())
 			if err := handler.HandleErrorf(enumValNodeInfo.Start(), "%s: value %s is using number %d which is in reserved range %d to %d", scope, ev.GetName(), ev.GetNumber(), rsvd[r].start, rsvd[r].end); err != nil {
 				return err
 			}
@@ -322,7 +322,7 @@ func validateField(res *result, isProto3 bool, name protoreflect.FullName, fld *
 			}
 		}
 		if fld.GetExtendee() != "" && fld.Label != nil && fld.GetLabel() == descriptorpb.FieldDescriptorProto_LABEL_REQUIRED {
-			fieldLabelNodeInfo := res.file.NodeInfo(node.FieldName())
+			fieldLabelNodeInfo := res.file.NodeInfo(node.FieldLabel())
 			if err := handler.HandleErrorf(fieldLabelNodeInfo.Start(), "%s: extension fields cannot be 'required'", scope); err != nil {
 				return err
 			}

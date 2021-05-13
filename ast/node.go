@@ -100,17 +100,6 @@ func NewRuneNode(r rune, tok Token) *RuneNode {
 	}
 }
 
-type EOFNode struct {
-	terminalNode
-}
-
-// NewEOFNode creates a new *EOFNode with the given properties.
-func NewEOFNode(tok Token) *EOFNode {
-	return &EOFNode{
-		terminalNode: tok.asTerminalNode(),
-	}
-}
-
 // EmptyDeclNode represents an empty declaration in protobuf source.
 // These amount to extra semicolons, with no actual content preceding
 // the semicolon.

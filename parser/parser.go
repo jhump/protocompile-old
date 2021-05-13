@@ -75,7 +75,7 @@ func Parse(filename string, r io.Reader, handler *reporter.Handler) (*ast.FileNo
 		lx.res = ast.NewEmptyFileNode(filename)
 	}
 	if lx.eof != nil {
-		eofNodeInfo := lx.res.NodeInfo(lx.eof)
+		eofNodeInfo := lx.res.TokenInfo(*lx.eof)
 		lx.res.FinalComments = eofNodeInfo.LeadingComments()
 		lx.res.FinalWhitespace = eofNodeInfo.LeadingWhitespace()
 	}
