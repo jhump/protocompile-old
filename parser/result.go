@@ -82,7 +82,7 @@ func (r *result) createFileDescriptor(filename string, file *ast.FileNode, handl
 			fd.Syntax = proto.String(file.Syntax.Syntax.AsString())
 		}
 	} else {
-		nodeInfo := file.TokenInfo(file.Start())
+		nodeInfo := file.NodeInfo(file)
 		handler.HandleWarning(nodeInfo.Start(), ErrNoSyntax)
 	}
 

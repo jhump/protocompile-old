@@ -51,11 +51,8 @@ func (rr *runeReader) unreadRune(sz int) {
 	rr.pos = newPos
 }
 
-func (rr *runeReader) setMark(sz int) {
-	if sz > rr.pos {
-		panic("tried to start mark at negative offset in file")
-	}
-	rr.mark = rr.pos - sz
+func (rr *runeReader) setMark() {
+	rr.mark = rr.pos
 }
 
 func (rr *runeReader) getMark() string {
@@ -70,7 +67,7 @@ type protoLex struct {
 
 	prevSym    ast.TerminalNode
 	prevOffset int
-	eof        *ast.Token
+	eof        ast.Token
 
 	comments []ast.Token
 }
@@ -142,7 +139,7 @@ var keywords = map[string]int{
 	"returns":    _RETURNS,
 }
 
-func (l *protoLex) maybeNewLine(r rune, sz int) {
+func (l *protoLex) maybeNewLine(r rune) {
 	if r == '\n' {
 		l.info.AddLine(l.input.offset())
 	}
@@ -162,16 +159,16 @@ func (l *protoLex) Lex(lval *protoSymType) int {
 	l.comments = nil
 
 	for {
+		l.input.setMark()
+
 		l.prevOffset = l.input.offset()
-		c, sz, err := l.input.readRune()
+		c, _, err := l.input.readRune()
 		if err == io.EOF {
 			// we're not actually returning a rune, but this will associate
 			// accumulated comments as a trailing comment on last symbol
 			// (if appropriate)
-			l.input.setMark(0)
 			l.setRune(lval, 0)
-			t := lval.b.Token()
-			l.eof = &t
+			l.eof = lval.b.Token()
 			return 0
 		} else if err != nil {
 			l.setError(lval, err)
@@ -180,11 +177,10 @@ func (l *protoLex) Lex(lval *protoSymType) int {
 
 		if strings.ContainsRune("\n\r\t ", c) {
 			// skip whitespace
-			l.maybeNewLine(c, sz)
+			l.maybeNewLine(c)
 			continue
 		}
 
-		l.input.setMark(sz)
 		if c == '.' {
 			// decimal literals could start with a dot
 			cn, szn, err := l.input.readRune()
@@ -238,15 +234,10 @@ func (l *protoLex) Lex(lval *protoSymType) int {
 					}
 					if (cnn >= '0' && cnn <= '9') || (cnn >= 'a' && cnn <= 'f') || (cnn >= 'A' && cnn <= 'F') {
 						// hexadecimal!
-						// This is a bit odd, because we've read the first digit but not unread it.
-						// This means that l.readHexNumber might not actually read any more runes
-						// for example 0x9, but that's fine because `l.input.getMark` will still give
-						// us the entire token.
 						l.readHexNumber()
-						token := l.input.getMark()
-						// this will be the whole token, including the `0[xX]` so we need to drop
-						// that prefix for ParseUint
-						ui, err := strconv.ParseUint(string(token[2:]), 16, 64)
+						// the token includes the "0x" prefix, so remove it
+						token := l.input.getMark()[2:]
+						ui, err := strconv.ParseUint(token, 16, 64)
 						if err != nil {
 							l.setError(lval, err)
 							return _ERROR
@@ -694,11 +685,11 @@ func (l *protoLex) skipToEndOfLineComment() {
 
 func (l *protoLex) skipToEndOfBlockComment() bool {
 	for {
-		c, sz, err := l.input.readRune()
+		c, _, err := l.input.readRune()
 		if err != nil {
 			return false
 		}
-		l.maybeNewLine(c, sz)
+		l.maybeNewLine(c)
 		if c == '*' {
 			c, sz, err := l.input.readRune()
 			if err != nil {

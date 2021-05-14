@@ -165,7 +165,8 @@ func (f *FileInfo) SourcePos(offset int) SourcePos {
 		Filename: f.name,
 		Offset:   offset,
 		Line:     lineNumber,
-		Col:      col + 1,
+		// Columns are 1-indexed in this AST
+		Col: col + 1,
 	}
 }
 
@@ -197,10 +198,11 @@ func (n NodeInfo) End() SourcePos {
 	}
 
 	tok := n.fileInfo.tokens[n.endIndex]
-	// we need to give SourcePos our "column" -1 to ensure that
-	// it calculates the correct line (otherwise for comments which include
-	// the newline character the offset would be on the next line). However
-	// the expected SourceCodeInfo requires the end column to be `tok.offset + tok.length`
+	// protobuf SourceCodeInfo treats column info as `[start, end)`
+	// however to convert an offset to a line number correctly, we need
+	// the exact offest of the end character. Therefore, we calculate SourcePos with
+	// the inclusive range `[start, end]` but return column information in the
+	// open range `[start, end)`.
 	pos := n.fileInfo.SourcePos(tok.offset + tok.length - 1)
 	pos.Col = pos.Col + 1
 	return pos

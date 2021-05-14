@@ -5,17 +5,15 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/jhump/protocompile/reporter"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/jhump/protocompile/ast"
+	"github.com/jhump/protocompile/reporter"
 )
 
 func TestLexer(t *testing.T) {
-	r := &testReporter{
-		t: t,
-	}
+	handler := reporter.NewHandler(nil)
 	l := newTestLexer(t, strings.NewReader(`
 	// comment
 
@@ -81,7 +79,7 @@ foo
 	/* another comment followed by some final whitespace*/
 
 	
-	`), r)
+	`), handler)
 
 	var prev ast.Node
 	var sym protoSymType
@@ -219,11 +217,12 @@ foo
 	if tok := l.Lex(&sym); tok != 0 {
 		t.Fatalf("lexer reported symbol after what should have been EOF: %d", tok)
 	}
+	require.NoError(t, handler.Error())
 	// Now we check final state of lexer for unattached comments and final whitespace
 	// One of the final comments get associated as trailing comment for final token
 	prevNodeInfo := l.info.NodeInfo(prev)
 	assert.Equal(t, 1, prevNodeInfo.TrailingComments().Len(), "last token: wrong number of trailing comments")
-	eofNodeInfo := l.info.TokenInfo(*l.eof)
+	eofNodeInfo := l.info.TokenInfo(l.eof)
 	finalComments := eofNodeInfo.LeadingComments()
 	if assert.Equal(t, 2, finalComments.Len(), "wrong number of final remaining comments") {
 		assert.Equal(t, "// comment attached to no tokens (upcoming token is EOF!)\n", finalComments.Index(0).RawText(), "incorrect final comment text")
@@ -249,7 +248,8 @@ func TestLexerErrors(t *testing.T) {
 		{str: `/* foobar`, errMsg: "unexpected EOF"},
 	}
 	for i, tc := range testCases {
-		l := newTestLexer(t, strings.NewReader(tc.str), nil)
+		handler := reporter.NewHandler(nil)
+		l := newTestLexer(t, strings.NewReader(tc.str), handler)
 		var sym protoSymType
 		tok := l.Lex(&sym)
 		if assert.Equal(t, _ERROR, tok) {
@@ -259,8 +259,8 @@ func TestLexerErrors(t *testing.T) {
 	}
 }
 
-func newTestLexer(t *testing.T, in io.Reader, r reporter.Reporter) *protoLex {
-	lexer, err := newLexer(in, "test.proto", reporter.NewHandler(r))
+func newTestLexer(t *testing.T, in io.Reader, h *reporter.Handler) *protoLex {
+	lexer, err := newLexer(in, "test.proto", h)
 	require.NoError(t, err)
 	return lexer
 }
