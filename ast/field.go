@@ -586,7 +586,7 @@ type SyntheticMapField struct {
 func NewSyntheticMapField(ident IdentValueNode, tagNum uint64) *SyntheticMapField {
 	tag := &UintLiteralNode{
 		terminalNode: ident.Start().asTerminalNode(),
-		Val: tagNum,
+		Val:          tagNum,
 	}
 	return &SyntheticMapField{Ident: ident, Tag: tag}
 }

@@ -147,12 +147,12 @@ file : syntax {
 	}
 	| fileDecls  {
 		lex := protolex.(*protoLex)
-		$$ = ast.NewFileNode(nil, $1)
+		$$ = ast.NewFileNode(lex.info, nil, $1)
 		lex.res = $$
 	}
 	| syntax fileDecls {
 		lex := protolex.(*protoLex)
-		$$ = ast.NewFileNode($1, $2)
+		$$ = ast.NewFileNode(lex.info, $1, $2)
 		lex.res = $$
 	}
 	| {

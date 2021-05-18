@@ -35,6 +35,7 @@ func (rr *runeReader) readRune() (r rune, size int, err error) {
 		rr.err = fmt.Errorf("invalid UTF8 at offset %d: %x", rr.pos, rr.data[rr.pos])
 		return 0, 0, rr.err
 	}
+	rr.pos = rr.pos + sz
 	return r, sz, nil
 }
 
@@ -50,11 +51,8 @@ func (rr *runeReader) unreadRune(sz int) {
 	rr.pos = newPos
 }
 
-func (rr *runeReader) setMark(sz int) {
-	if sz > rr.pos {
-		panic("tried to start mark at negative offset in file")
-	}
-	rr.mark = rr.pos - sz
+func (rr *runeReader) setMark() {
+	rr.mark = rr.pos
 }
 
 func (rr *runeReader) getMark() string {
@@ -77,10 +75,6 @@ type protoLex struct {
 var utf8Bom = []byte{0xEF, 0xBB, 0xBF}
 
 func newLexer(in io.Reader, filename string, handler *reporter.Handler) (*protoLex, error) {
-	contents, err := ioutil.ReadAll(in)
-	if err != nil {
-		return nil, err
-	}
 	br := bufio.NewReader(in)
 
 	// if file has UTF8 byte order marker preface, consume it
@@ -89,6 +83,10 @@ func newLexer(in io.Reader, filename string, handler *reporter.Handler) (*protoL
 		_, _ = br.Discard(3)
 	}
 
+	contents, err := ioutil.ReadAll(br)
+	if err != nil {
+		return nil, err
+	}
 	return &protoLex{
 		input:   &runeReader{data: contents},
 		info:    ast.NewFileInfo(filename, contents),
@@ -141,9 +139,9 @@ var keywords = map[string]int{
 	"returns":    _RETURNS,
 }
 
-func (l *protoLex) maybeNewLine(r rune, sz int) {
+func (l *protoLex) maybeNewLine(r rune) {
 	if r == '\n' {
-		l.info.AddLine(l.input.offset()-sz)
+		l.info.AddLine(l.input.offset())
 	}
 }
 
@@ -161,8 +159,10 @@ func (l *protoLex) Lex(lval *protoSymType) int {
 	l.comments = nil
 
 	for {
+		l.input.setMark()
+
 		l.prevOffset = l.input.offset()
-		c, sz, err := l.input.readRune()
+		c, _, err := l.input.readRune()
 		if err == io.EOF {
 			// we're not actually returning a rune, but this will associate
 			// accumulated comments as a trailing comment on last symbol
@@ -177,11 +177,10 @@ func (l *protoLex) Lex(lval *protoSymType) int {
 
 		if strings.ContainsRune("\n\r\t\f\v ", c) {
 			// skip whitespace
-			l.maybeNewLine(c, sz)
+			l.maybeNewLine(c)
 			continue
 		}
 
-		l.input.setMark(sz)
 		if c == '.' {
 			// decimal literals could start with a dot
 			cn, szn, err := l.input.readRune()
@@ -308,7 +307,7 @@ func (l *protoLex) Lex(lval *protoSymType) int {
 
 func (l *protoLex) newToken() ast.Token {
 	offset := l.input.mark
-	length := l.input.pos-l.input.mark
+	length := l.input.pos - l.input.mark
 	return l.info.AddToken(offset, length)
 }
 
@@ -337,7 +336,7 @@ func (l *protoLex) setPrevAndAddComments(n ast.TerminalNode, isDot bool) {
 	comments := l.comments
 	l.comments = nil
 	var prevTrailingComments []ast.Token
-	if l.prevSym != nil && len(l.comments) > 0 && prevEnd < nStart {
+	if l.prevSym != nil && len(comments) > 0 && prevEnd < nStart {
 		// we may need to re-attribute the first comment to
 		// instead be previous node's trailing comment
 		c := comments[0]
@@ -350,26 +349,27 @@ func (l *protoLex) setPrevAndAddComments(n ast.TerminalNode, isDot bool) {
 		} else if commentStart == prevEnd+1 {
 			// comment is right after previous symbol; see if it is detached
 			// and if so re-attribute
-			singleLineStyle := strings.HasPrefix(commentInfo.RawText(), "//")
-			line := commentInfo.End().Line
-			groupEnd := -1
+			prevSingleLineStyle := strings.HasPrefix(commentInfo.RawText(), "//")
+			prevLine := commentInfo.End().Line
+			groupEnd := 0
 			for i := 1; i < len(comments); i++ {
 				c := comments[i]
 				commentInfo := l.info.TokenInfo(c)
 				newGroup := false
-				if !singleLineStyle || commentInfo.Start().Line > line+1 {
+				if !prevSingleLineStyle || commentInfo.Start().Line > prevLine+1 {
 					// we've found a gap between comments, which means the
 					// previous comments were detached
 					newGroup = true
 				} else {
-					line = commentInfo.End().Line
-					singleLineStyle = strings.HasPrefix(commentInfo.RawText(), "//")
+					singleLineStyle := strings.HasPrefix(commentInfo.RawText(), "//")
 					if !singleLineStyle {
 						// we've found a switch from // comments to /*
 						// consider that a new group which means the
 						// previous comments were detached
 						newGroup = true
 					}
+					prevLine = commentInfo.End().Line
+					prevSingleLineStyle = singleLineStyle
 				}
 				if newGroup {
 					groupEnd = i
@@ -377,7 +377,7 @@ func (l *protoLex) setPrevAndAddComments(n ast.TerminalNode, isDot bool) {
 				}
 			}
 
-			if groupEnd == -1 {
+			if groupEnd == 0 {
 				// just one group of comments; we'll mark it as a trailing
 				// comment if it immediately follows previous symbol and is
 				// detached from current symbol
@@ -635,12 +635,12 @@ func (l *protoLex) readStringLiteral(quote rune) (string, error) {
 
 func (l *protoLex) skipToEndOfLineComment() {
 	for {
-		c, sz, err := l.input.readRune()
+		c, _, err := l.input.readRune()
 		if err != nil {
 			return
 		}
 		if c == '\n' {
-			l.input.unreadRune(sz)
+			l.info.AddLine(l.input.offset())
 			return
 		}
 	}
@@ -648,11 +648,11 @@ func (l *protoLex) skipToEndOfLineComment() {
 
 func (l *protoLex) skipToEndOfBlockComment() bool {
 	for {
-		c, sz, err := l.input.readRune()
+		c, _, err := l.input.readRune()
 		if err != nil {
 			return false
 		}
-		l.maybeNewLine(c, sz)
+		l.maybeNewLine(c)
 		if c == '*' {
 			c, sz, err := l.input.readRune()
 			if err != nil {

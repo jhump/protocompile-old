@@ -23,7 +23,7 @@ type FileNode struct {
 	Decls  []FileElement
 
 	// Any comments that follow the last token in the file.
-	FinalComments []Comment
+	FinalComments Comments
 	// Any whitespace at the end of the file (after the last token or
 	// last comment in the file).
 	FinalWhitespace string
@@ -67,15 +67,27 @@ func NewFileNode(info *FileInfo, syntax *SyntaxNode, decls []FileElement) *FileN
 }
 
 func NewEmptyFileNode(filename string) *FileNode {
+	fileInfo := NewFileInfo(filename, []byte{})
+	fileInfo.AddToken(0, 0) // EOF
+
 	return &FileNode{
 		compositeNode: compositeNode{
 			children: []Node{NewNoSourceNode(filename)},
 		},
+		fileInfo: fileInfo,
 	}
+}
+
+func (f *FileNode) Name() string {
+	return f.fileInfo.Name()
 }
 
 func (f *FileNode) NodeInfo(n Node) NodeInfo {
 	return f.fileInfo.NodeInfo(n)
+}
+
+func (f *FileNode) TokenInfo(t Token) NodeInfo {
+	return f.fileInfo.TokenInfo(t)
 }
 
 func (f *FileNode) GetSyntax() Node {

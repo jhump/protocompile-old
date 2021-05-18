@@ -49,14 +49,18 @@ type tokenSpan struct {
 // NewFileInfo creates a new instance for the given file.
 func NewFileInfo(filename string, contents []byte) *FileInfo {
 	return &FileInfo{
-		name: filename,
-		data: contents,
+		name:  filename,
+		data:  contents,
 		lines: []int{0},
 	}
 }
 
-// AddLine adds the offset of a new line in the file. As the lexer encounters
-// newlines, it should call this method with the offset of the newline character.
+func (f *FileInfo) Name() string {
+	return f.name
+}
+
+// AddLine adds the offset representing the beginning of the "next" line in the file.
+// The first line always starts at offset 0, the second line starts at offset-of-newline-char+1.
 func (f *FileInfo) AddLine(offset int) {
 	if offset < 0 {
 		panic(fmt.Sprintf("invalid offset: %d must not be negative", offset))
@@ -84,12 +88,13 @@ func (f *FileInfo) AddToken(offset, length int) Token {
 	if length < 0 {
 		panic(fmt.Sprintf("invalid length: %d must not be negative", length))
 	}
-	if offset + offset > len(f.data) {
+	if offset+length > len(f.data) {
 		panic(fmt.Sprintf("invalid offset+length: %d is greater than file size %d", offset+length, len(f.data)))
 	}
 
+	tokenID := len(f.tokens)
 	if len(f.tokens) > 0 {
-		lastToken := f.tokens[len(f.tokens)-1]
+		lastToken := f.tokens[tokenID-1]
 		lastEnd := lastToken.offset + lastToken.length - 1
 		if offset <= lastEnd {
 			panic(fmt.Sprintf("invalid offset: %d is not greater than previously observed token end %d", offset, lastEnd))
@@ -97,7 +102,7 @@ func (f *FileInfo) AddToken(offset, length int) Token {
 	}
 
 	f.tokens = append(f.tokens, tokenSpan{offset: offset, length: length})
-	return Token(offset)
+	return Token(tokenID)
 }
 
 // AddComment adds info about a comment to this file. Comments must first be
@@ -160,7 +165,8 @@ func (f *FileInfo) SourcePos(offset int) SourcePos {
 		Filename: f.name,
 		Offset:   offset,
 		Line:     lineNumber,
-		Col:      col + 1,
+		// Columns are 1-indexed in this AST
+		Col: col + 1,
 	}
 }
 
@@ -192,7 +198,14 @@ func (n NodeInfo) End() SourcePos {
 	}
 
 	tok := n.fileInfo.tokens[n.endIndex]
-	return n.fileInfo.SourcePos(tok.offset + tok.length - 1)
+	// protobuf SourceCodeInfo treats column info as `[start, end)`
+	// however to convert an offset to a line number correctly, we need
+	// the exact offest of the end character. Therefore, we calculate SourcePos with
+	// the inclusive range `[start, end]` but return column information in the
+	// open range `[start, end)`.
+	pos := n.fileInfo.SourcePos(tok.offset + tok.length - 1)
+	pos.Col = pos.Col + 1
+	return pos
 }
 
 func (n NodeInfo) LeadingWhitespace() string {
@@ -277,7 +290,7 @@ func (n NodeInfo) TrailingComments() Comments {
 func (n NodeInfo) RawText() string {
 	startTok := n.fileInfo.tokens[n.startIndex]
 	endTok := n.fileInfo.tokens[n.endIndex]
-	return string(n.fileInfo.data[startTok.offset:endTok.offset+endTok.length])
+	return string(n.fileInfo.data[startTok.offset : endTok.offset+endTok.length])
 }
 
 // SourcePos identifies a location in a proto source file.
@@ -322,19 +335,19 @@ type Comment struct {
 	index    int
 }
 
-func (c *Comment) Start() SourcePos {
+func (c Comment) Start() SourcePos {
 	comment := c.fileInfo.comments[c.index]
 	tok := c.fileInfo.tokens[comment.index]
 	return c.fileInfo.SourcePos(tok.offset)
 }
 
-func (c *Comment) End() SourcePos {
+func (c Comment) End() SourcePos {
 	comment := c.fileInfo.comments[c.index]
 	tok := c.fileInfo.tokens[comment.index]
 	return c.fileInfo.SourcePos(tok.offset + tok.length - 1)
 }
 
-func (c *Comment) LeadingWhitespace() string {
+func (c Comment) LeadingWhitespace() string {
 	comment := c.fileInfo.comments[c.index]
 	tok := c.fileInfo.tokens[comment.index]
 	var prevEnd int
@@ -345,8 +358,8 @@ func (c *Comment) LeadingWhitespace() string {
 	return string(c.fileInfo.data[prevEnd:tok.offset])
 }
 
-func (c *Comment) RawText() string {
+func (c Comment) RawText() string {
 	comment := c.fileInfo.comments[c.index]
 	tok := c.fileInfo.tokens[comment.index]
-	return string(c.fileInfo.data[tok.offset:tok.offset+tok.length])
+	return string(c.fileInfo.data[tok.offset : tok.offset+tok.length])
 }
