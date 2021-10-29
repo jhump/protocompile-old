@@ -5,7 +5,6 @@ package ast
 // of location in the source file. It also provides information
 // about all prior comments (attached as leading comments) and
 // optional subsequent comments (attached as trailing comments).
-// TODO: DELETE and replace with Node_
 type Node interface {
 	Start() Token
 	End() Token
@@ -15,7 +14,6 @@ type Node interface {
 // the tokens/lexemes in the protobuf language. Comments and
 // whitespace are accumulated by the lexer and associated with
 // the following lexed token.
-// TODO: DELETE
 type TerminalNode interface {
 	Node
 	Token() Token
@@ -29,9 +27,6 @@ var _ TerminalNode = (*BoolLiteralNode)(nil)
 var _ TerminalNode = (*SpecialFloatLiteralNode)(nil)
 var _ TerminalNode = (*KeywordNode)(nil)
 var _ TerminalNode = (*RuneNode)(nil)
-
-type TerminalNode_ interface {
-}
 
 // CompositeNode represents any non-terminal node in the tree. These
 // are interior or root nodes and have child nodes.

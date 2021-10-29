@@ -6,6 +6,7 @@ import "fmt"
 // This allows NoSourceNode to be used in place of *FileNode for some usages.
 type FileDeclNode interface {
 	Node
+	Name() string
 	GetSyntax() Node
 	NodeInfo(n Node) NodeInfo
 }
@@ -22,8 +23,8 @@ type FileNode struct {
 	Syntax *SyntaxNode // nil if file has no syntax declaration
 	Decls  []FileElement
 
-	// This synthetic token allows access to
-	EOF Token
+	// This synthetic node allows access to final comments and whitespace
+	EOF *RuneNode
 }
 
 // NewFileElement creates a new *FileNode. The syntax parameter is optional. If it
@@ -53,7 +54,8 @@ func NewFileNode(info *FileInfo, syntax *SyntaxNode, decls []FileElement, eof To
 		}
 	}
 
-	children = append(children, NewRuneNode(0, eof))
+	eofNode := NewRuneNode(0, eof)
+	children = append(children, eofNode)
 
 	return &FileNode{
 		compositeNode: compositeNode{
@@ -62,7 +64,7 @@ func NewFileNode(info *FileInfo, syntax *SyntaxNode, decls []FileElement, eof To
 		fileInfo: info,
 		Syntax:   syntax,
 		Decls:    decls,
-		EOF:      eof,
+		EOF:      eofNode,
 	}
 }
 

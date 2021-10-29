@@ -32,7 +32,7 @@ func TestASTRoundTrips(t *testing.T) {
 					return
 				}
 				var buf bytes.Buffer
-				err = print(&buf, root)
+				err = printAST(&buf, root)
 				if assert.Nil(t, err, "%v", err) {
 					// see if file survived round trip!
 					assert.Equal(t, string(data), buf.String())
@@ -44,12 +44,12 @@ func TestASTRoundTrips(t *testing.T) {
 	assert.Nil(t, err, "%v", err)
 }
 
-// print prints the given AST node to the given output. This operation
+// printAST prints the given AST node to the given output. This operation
 // basically walks the AST and, for each TerminalNode, prints the node's
 // leading comments, leading whitespace, the node's raw text, and then
 // any trailing comments. If the given node is a *FileNode, it will then
 // also print the file's FinalComments and FinalWhitespace.
-func print(w io.Writer, file *ast.FileNode) error {
+func printAST(w io.Writer, file *ast.FileNode) error {
 	sw, ok := w.(stringWriter)
 	if !ok {
 		sw = &strWriter{w}

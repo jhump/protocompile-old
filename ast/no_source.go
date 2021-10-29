@@ -18,6 +18,10 @@ func NewNoSourceNode(filename string) NoSourceNode {
 	return NoSourceNode{filename: filename}
 }
 
+func (n NoSourceNode) Name() string {
+	return n.filename
+}
+
 func (n NoSourceNode) Start() Token {
 	return 0
 }
