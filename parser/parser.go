@@ -74,9 +74,6 @@ func Parse(filename string, r io.Reader, handler *reporter.Handler) (*ast.FileNo
 		// or the file was empty; synthesize empty non-nil AST
 		lx.res = ast.NewEmptyFileNode(filename)
 	}
-	eofNodeInfo := lx.res.TokenInfo(lx.eof)
-	lx.res.FinalComments = eofNodeInfo.LeadingComments()
-	lx.res.FinalWhitespace = eofNodeInfo.LeadingWhitespace()
 	return lx.res, handler.Error()
 }
 

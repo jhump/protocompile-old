@@ -32,7 +32,7 @@ func TestASTRoundTrips(t *testing.T) {
 					return
 				}
 				var buf bytes.Buffer
-				err = print(&buf, root, root)
+				err = print(&buf, root)
 				if assert.Nil(t, err, "%v", err) {
 					// see if file survived round trip!
 					assert.Equal(t, string(data), buf.String())
@@ -49,12 +49,12 @@ func TestASTRoundTrips(t *testing.T) {
 // leading comments, leading whitespace, the node's raw text, and then
 // any trailing comments. If the given node is a *FileNode, it will then
 // also print the file's FinalComments and FinalWhitespace.
-func print(w io.Writer, node ast.Node, file ast.FileDeclNode) error {
+func print(w io.Writer, file *ast.FileNode) error {
 	sw, ok := w.(stringWriter)
 	if !ok {
 		sw = &strWriter{w}
 	}
-	err := ast.Walk(node, &ast.SimpleVisitor{
+	err := ast.Walk(file, &ast.SimpleVisitor{
 		DoVisitTerminalNode: func(token ast.TerminalNode) error {
 			info := file.NodeInfo(token)
 			if err := printComments(sw, info.LeadingComments()); err != nil {
@@ -75,6 +75,13 @@ func print(w io.Writer, node ast.Node, file ast.FileDeclNode) error {
 	if err != nil {
 		return err
 	}
+
+	//err = printComments(sw, file.FinalComments)
+	//if err != nil {
+	//	return err
+	//}
+	//_, err = sw.WriteString(file.FinalWhitespace)
+	//return err
 
 	return nil
 }

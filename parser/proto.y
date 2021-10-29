@@ -142,17 +142,17 @@ import (
 
 file : syntax {
 		lex := protolex.(*protoLex)
-		$$ = ast.NewFileNode(lex.info, $1, nil)
+		$$ = ast.NewFileNode(lex.info, $1, nil, lex.eof)
 		lex.res = $$
 	}
 	| fileDecls  {
 		lex := protolex.(*protoLex)
-		$$ = ast.NewFileNode(lex.info, nil, $1)
+		$$ = ast.NewFileNode(lex.info, nil, $1, lex.eof)
 		lex.res = $$
 	}
 	| syntax fileDecls {
 		lex := protolex.(*protoLex)
-		$$ = ast.NewFileNode(lex.info, $1, $2)
+		$$ = ast.NewFileNode(lex.info, $1, $2, lex.eof)
 		lex.res = $$
 	}
 	| {

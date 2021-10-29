@@ -22,11 +22,8 @@ type FileNode struct {
 	Syntax *SyntaxNode // nil if file has no syntax declaration
 	Decls  []FileElement
 
-	// Any comments that follow the last token in the file.
-	FinalComments Comments
-	// Any whitespace at the end of the file (after the last token or
-	// last comment in the file).
-	FinalWhitespace string
+	// This synthetic token allows access to
+	EOF Token
 }
 
 // NewFileElement creates a new *FileNode. The syntax parameter is optional. If it
@@ -34,7 +31,7 @@ type FileNode struct {
 //
 // This function panics if the concrete type of any element of decls is not
 // from this package.
-func NewFileNode(info *FileInfo, syntax *SyntaxNode, decls []FileElement) *FileNode {
+func NewFileNode(info *FileInfo, syntax *SyntaxNode, decls []FileElement, eof Token) *FileNode {
 	numChildren := len(decls)
 	if syntax != nil {
 		numChildren++
@@ -56,6 +53,8 @@ func NewFileNode(info *FileInfo, syntax *SyntaxNode, decls []FileElement) *FileN
 		}
 	}
 
+	children = append(children, NewRuneNode(0, eof))
+
 	return &FileNode{
 		compositeNode: compositeNode{
 			children: children,
@@ -63,6 +62,7 @@ func NewFileNode(info *FileInfo, syntax *SyntaxNode, decls []FileElement) *FileN
 		fileInfo: info,
 		Syntax:   syntax,
 		Decls:    decls,
+		EOF:      eof,
 	}
 }
 

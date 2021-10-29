@@ -1192,7 +1192,7 @@ protodefault:
 //line proto.y:143
 		{
 			lex := protolex.(*protoLex)
-			protoVAL.file = ast.NewFileNode(lex.info, protoDollar[1].syn, nil)
+			protoVAL.file = ast.NewFileNode(lex.info, protoDollar[1].syn, nil, lex.eof)
 			lex.res = protoVAL.file
 		}
 	case 2:
@@ -1200,7 +1200,7 @@ protodefault:
 //line proto.y:148
 		{
 			lex := protolex.(*protoLex)
-			protoVAL.file = ast.NewFileNode(lex.info, nil, protoDollar[1].fileDecls)
+			protoVAL.file = ast.NewFileNode(lex.info, nil, protoDollar[1].fileDecls, lex.eof)
 			lex.res = protoVAL.file
 		}
 	case 3:
@@ -1208,7 +1208,7 @@ protodefault:
 //line proto.y:153
 		{
 			lex := protolex.(*protoLex)
-			protoVAL.file = ast.NewFileNode(lex.info, protoDollar[1].syn, protoDollar[2].fileDecls)
+			protoVAL.file = ast.NewFileNode(lex.info, protoDollar[1].syn, protoDollar[2].fileDecls, lex.eof)
 			lex.res = protoVAL.file
 		}
 	case 4:
