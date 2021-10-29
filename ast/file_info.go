@@ -198,13 +198,17 @@ func (n NodeInfo) End() SourcePos {
 	}
 
 	tok := n.fileInfo.tokens[n.endIndex]
-	// protobuf SourceCodeInfo treats column info as `[start, end)`
-	// however to convert an offset to a line number correctly, we need
-	// the exact offest of the end character. Therefore, we calculate SourcePos with
-	// the inclusive range `[start, end]` but return column information in the
-	// open range `[start, end)`.
-	pos := n.fileInfo.SourcePos(tok.offset + tok.length - 1)
-	pos.Col = pos.Col + 1
+	// find offset of last character in the span
+	offset := tok.offset
+	if tok.length > 0 {
+		offset += tok.length - 1
+	}
+	pos := n.fileInfo.SourcePos(offset)
+	if tok.length > 0 {
+		// We return "open range", so end is the position *after* the
+		// last character in the span. So we adjust
+		pos.Col = pos.Col + 1
+	}
 	return pos
 }
 
