@@ -9,6 +9,7 @@ import (
 	"google.golang.org/protobuf/types/descriptorpb"
 
 	"github.com/jhump/protocompile/ast"
+	"github.com/jhump/protocompile/internal"
 	"github.com/jhump/protocompile/reporter"
 	"github.com/jhump/protocompile/walk"
 )
@@ -91,7 +92,22 @@ func reportSymbolCollision(pos ast.SourcePos, fqn protoreflect.FullName, additio
 	if additionIsEnumVal || existing.isEnumValue {
 		suffix = "; protobuf uses C++ scoping rules for enum values, so they exist in the scope enclosing the enum"
 	}
-	return handler.HandleErrorf(pos, "symbol %q already defined at %v%s", fqn, existing.pos, suffix)
+	first := existing.pos
+	second := pos
+	if posLess(first, second) {
+		first, second = second, first
+	}
+	return handler.HandleErrorf(first, "symbol %q already defined at %v%s", fqn, second, suffix)
+}
+
+func posLess(a, b ast.SourcePos) bool {
+	if a.Filename == b.Filename {
+		if a.Line == b.Line {
+			return a.Col < b.Col
+		}
+		return a.Line < b.Line
+	}
+	return false
 }
 
 func (s *Symbols) checkFileLocked(f protoreflect.FileDescriptor, handler *reporter.Handler) error {
@@ -123,9 +139,33 @@ func (s *Symbols) checkFileLocked(f protoreflect.FileDescriptor, handler *report
 }
 
 func sourcePositionFor(d protoreflect.Descriptor) ast.SourcePos {
-	loc := d.ParentFile().SourceLocations().ByDescriptor(d)
-	if isZeroLoc(loc) {
+	path, ok := computePath(d)
+	if !ok {
 		return ast.UnknownPos(d.ParentFile().Path())
+	}
+	var namePath protoreflect.SourcePath
+	switch d.(type) {
+	case protoreflect.FieldDescriptor:
+		namePath = append(path, internal.Field_nameTag)
+	case protoreflect.MessageDescriptor:
+		namePath = append(path, internal.Message_nameTag)
+	case protoreflect.OneofDescriptor:
+		namePath = append(path, internal.OneOf_nameTag)
+	case protoreflect.EnumDescriptor:
+		namePath = append(path, internal.Enum_nameTag)
+	case protoreflect.EnumValueDescriptor:
+		namePath = append(path, internal.EnumVal_nameTag)
+	case protoreflect.ServiceDescriptor:
+		namePath = append(path, internal.Service_nameTag)
+	case protoreflect.MethodDescriptor:
+		namePath = append(path, internal.Method_nameTag)
+	}
+	loc := d.ParentFile().SourceLocations().ByPath(namePath)
+	if isZeroLoc(loc) {
+		loc = d.ParentFile().SourceLocations().ByPath(path)
+		if isZeroLoc(loc) {
+			return ast.UnknownPos(d.ParentFile().Path())
+		}
 	}
 	return ast.SourcePos{
 		Filename: d.ParentFile().Path(),
@@ -206,7 +246,7 @@ func (s *Symbols) importResultLocked(r *result, populatePool bool, checkExts boo
 
 func (s *Symbols) checkResultLocked(r *result, checkExts bool, handler *reporter.Handler) error {
 	resultSyms := map[protoreflect.FullName]symbolEntry{}
-	return walk.DescriptorProtos(r.Proto(), func(fqn protoreflect.FullName, d proto.Message) error {
+	return walk.DescriptorProtos(r.FileDescriptorProto(), func(fqn protoreflect.FullName, d proto.Message) error {
 		_, isEnumVal := d.(*descriptorpb.EnumValueDescriptorProto)
 		file := r.FileNode()
 		node := r.Node(d)
@@ -263,6 +303,8 @@ func nameStart(file ast.FileDeclNode, n ast.Node) ast.SourcePos {
 		return file.NodeInfo(n.FieldName()).Start()
 	case ast.MessageDeclNode:
 		return file.NodeInfo(n.MessageName()).Start()
+	case *ast.OneOfNode:
+		return file.NodeInfo(n.Name).Start()
 	case ast.EnumValueDeclNode:
 		return file.NodeInfo(n.GetName()).Start()
 	case *ast.EnumNode:
@@ -283,7 +325,7 @@ func (s *Symbols) commitResultLocked(r *result, populatePool bool) {
 	if s.exts == nil {
 		s.exts = map[protoreflect.FullName]map[protoreflect.FieldNumber]ast.SourcePos{}
 	}
-	_ = walk.DescriptorProtos(r.Proto(), func(fqn protoreflect.FullName, d proto.Message) error {
+	_ = walk.DescriptorProtos(r.FileDescriptorProto(), func(fqn protoreflect.FullName, d proto.Message) error {
 		pos := nameStart(r.FileNode(), r.Node(d))
 		_, isEnumValue := d.(protoreflect.EnumValueDescriptor)
 		s.symbols[fqn] = symbolEntry{pos: pos, isEnumValue: isEnumValue}

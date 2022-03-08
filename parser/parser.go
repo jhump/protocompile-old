@@ -93,7 +93,7 @@ type Result interface {
 	// Result was created without an AST.
 	AST() *ast.FileNode
 	// Proto returns the file descriptor proto.
-	Proto() *descriptorpb.FileDescriptorProto
+	FileDescriptorProto() *descriptorpb.FileDescriptorProto
 
 	// FileNode returns the root of the AST. If this result has no AST then a
 	// placeholder node is returned.

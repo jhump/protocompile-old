@@ -140,10 +140,10 @@ func TestOptionsInUnlinkedFiles(t *testing.T) {
 			continue
 		}
 		actual := map[string]interface{}{}
-		buildUninterpretedMapForFile(res.Proto(), actual)
+		buildUninterpretedMapForFile(res.FileDescriptorProto(), actual)
 		assert.Equal(t, tc.uninterpreted, actual, "case #%d resulted in wrong uninterpreted options", i)
 		if tc.checkInterpreted != nil {
-			tc.checkInterpreted(t, res.Proto())
+			tc.checkInterpreted(t, res.FileDescriptorProto())
 		}
 	}
 }

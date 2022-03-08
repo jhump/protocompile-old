@@ -73,7 +73,7 @@ func printSourceCodeInfo(fd linker.File, out io.Writer) {
 
 	var fdMsg *descriptorpb.FileDescriptorProto
 	if r, ok := fd.(linker.Result); ok {
-		fdMsg = r.Proto()
+		fdMsg = r.FileDescriptorProto()
 	} else {
 		fdMsg = protodesc.ToFileDescriptorProto(fd)
 	}

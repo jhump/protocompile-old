@@ -35,6 +35,12 @@ type result struct {
 }
 
 var _ protoreflect.FileDescriptor = (*result)(nil)
+var _ Result = (*result)(nil)
+var _ DescriptorProtoWrapper = (*result)(nil)
+
+func (r *result) AsProto() proto.Message {
+	return r.FileDescriptorProto()
+}
 
 func (r *result) ParentFile() protoreflect.FileDescriptor {
 	return r
@@ -49,7 +55,7 @@ func (r *result) Index() int {
 }
 
 func (r *result) Syntax() protoreflect.Syntax {
-	switch r.Proto().GetSyntax() {
+	switch r.FileDescriptorProto().GetSyntax() {
 	case "proto2", "":
 		return protoreflect.Proto2
 	case "proto3":
@@ -72,15 +78,15 @@ func (r *result) IsPlaceholder() bool {
 }
 
 func (r *result) Options() protoreflect.ProtoMessage {
-	return r.Proto().Options
+	return r.FileDescriptorProto().Options
 }
 
 func (r *result) Path() string {
-	return r.Proto().GetName()
+	return r.FileDescriptorProto().GetName()
 }
 
 func (r *result) Package() protoreflect.FullName {
-	return protoreflect.FullName(r.Proto().GetPackage())
+	return protoreflect.FullName(r.FileDescriptorProto().GetPackage())
 }
 
 func (r *result) Imports() protoreflect.FileImports {
@@ -88,23 +94,23 @@ func (r *result) Imports() protoreflect.FileImports {
 }
 
 func (r *result) Enums() protoreflect.EnumDescriptors {
-	return &enumDescriptors{file: r, parent: r, enums: r.Proto().GetEnumType(), prefix: r.prefix}
+	return &enumDescriptors{file: r, parent: r, enums: r.FileDescriptorProto().GetEnumType(), prefix: r.prefix}
 }
 
 func (r *result) Messages() protoreflect.MessageDescriptors {
-	return &msgDescriptors{file: r, parent: r, msgs: r.Proto().GetMessageType(), prefix: r.prefix}
+	return &msgDescriptors{file: r, parent: r, msgs: r.FileDescriptorProto().GetMessageType(), prefix: r.prefix}
 }
 
 func (r *result) Extensions() protoreflect.ExtensionDescriptors {
-	return &extDescriptors{file: r, parent: r, exts: r.Proto().GetExtension(), prefix: r.prefix}
+	return &extDescriptors{file: r, parent: r, exts: r.FileDescriptorProto().GetExtension(), prefix: r.prefix}
 }
 
 func (r *result) Services() protoreflect.ServiceDescriptors {
-	return &svcDescriptors{file: r, svcs: r.Proto().GetService(), prefix: r.prefix}
+	return &svcDescriptors{file: r, svcs: r.FileDescriptorProto().GetService(), prefix: r.prefix}
 }
 
 func (r *result) SourceLocations() protoreflect.SourceLocations {
-	srcInfoProtos := r.Proto().GetSourceCodeInfo().GetLocation()
+	srcInfoProtos := r.FileDescriptorProto().GetSourceCodeInfo().GetLocation()
 	if r.srcLocs == nil && len(srcInfoProtos) > 0 {
 		r.srcLocs = asSourceLocations(srcInfoProtos)
 		r.srcLocIndex = computeSourceLocIndex(r.srcLocs)
@@ -162,7 +168,7 @@ func pathStr(p protoreflect.SourcePath) string {
 }
 
 func (r *result) AddOptionBytes(opts []byte) {
-	pm := r.Proto().Options
+	pm := r.FileDescriptorProto().Options
 	if pm == nil {
 		panic(fmt.Sprintf("options is nil for %q", r.Path()))
 	}
@@ -175,21 +181,21 @@ type fileImports struct {
 }
 
 func (f *fileImports) Len() int {
-	return len(f.parent.Proto().Dependency)
+	return len(f.parent.FileDescriptorProto().Dependency)
 }
 
 func (f *fileImports) Get(i int) protoreflect.FileImport {
-	dep := f.parent.Proto().Dependency[i]
+	dep := f.parent.FileDescriptorProto().Dependency[i]
 	desc := f.parent.deps.FindFileByPath(dep)
 	isPublic := false
-	for _, d := range f.parent.Proto().PublicDependency {
+	for _, d := range f.parent.FileDescriptorProto().PublicDependency {
 		if d == int32(i) {
 			isPublic = true
 			break
 		}
 	}
 	isWeak := false
-	for _, d := range f.parent.Proto().WeakDependency {
+	for _, d := range f.parent.FileDescriptorProto().WeakDependency {
 		if d == int32(i) {
 			isWeak = true
 			break
@@ -352,6 +358,9 @@ type msgDescriptor struct {
 	fqn    string
 }
 
+var _ protoreflect.MessageDescriptor = (*msgDescriptor)(nil)
+var _ DescriptorProtoWrapper = (*msgDescriptor)(nil)
+
 func (r *result) asMessageDescriptor(md *descriptorpb.DescriptorProto, file *result, parent protoreflect.Descriptor, index int, fqn string) *msgDescriptor {
 	if ret := r.descriptors[md]; ret != nil {
 		return ret.(*msgDescriptor)
@@ -359,6 +368,14 @@ func (r *result) asMessageDescriptor(md *descriptorpb.DescriptorProto, file *res
 	ret := &msgDescriptor{file: file, parent: parent, index: index, proto: md, fqn: fqn}
 	r.descriptors[md] = ret
 	return ret
+}
+
+func (m *msgDescriptor) MessageDescriptorProto() *descriptorpb.DescriptorProto {
+	return m.proto
+}
+
+func (m *msgDescriptor) AsProto() proto.Message {
+	return m.proto
 }
 
 func (m *msgDescriptor) ParentFile() protoreflect.FileDescriptor {
@@ -590,6 +607,9 @@ type enumDescriptor struct {
 	fqn    string
 }
 
+var _ protoreflect.EnumDescriptor = (*enumDescriptor)(nil)
+var _ DescriptorProtoWrapper = (*enumDescriptor)(nil)
+
 func (r *result) asEnumDescriptor(ed *descriptorpb.EnumDescriptorProto, file *result, parent protoreflect.Descriptor, index int, fqn string) *enumDescriptor {
 	if ret := r.descriptors[ed]; ret != nil {
 		return ret.(*enumDescriptor)
@@ -597,6 +617,14 @@ func (r *result) asEnumDescriptor(ed *descriptorpb.EnumDescriptorProto, file *re
 	ret := &enumDescriptor{file: file, parent: parent, index: index, proto: ed, fqn: fqn}
 	r.descriptors[ed] = ret
 	return ret
+}
+
+func (e *enumDescriptor) EnumDescriptorProto() *descriptorpb.EnumDescriptorProto {
+	return e.proto
+}
+
+func (e *enumDescriptor) AsProto() proto.Message {
+	return e.proto
 }
 
 func (e *enumDescriptor) ParentFile() protoreflect.FileDescriptor {
@@ -726,6 +754,9 @@ type enValDescriptor struct {
 	fqn    string
 }
 
+var _ protoreflect.EnumValueDescriptor = (*enValDescriptor)(nil)
+var _ DescriptorProtoWrapper = (*enValDescriptor)(nil)
+
 func (r *result) asEnumValueDescriptor(ed *descriptorpb.EnumValueDescriptorProto, file *result, parent *enumDescriptor, index int, fqn string) *enValDescriptor {
 	if ret := r.descriptors[ed]; ret != nil {
 		return ret.(*enValDescriptor)
@@ -733,6 +764,14 @@ func (r *result) asEnumValueDescriptor(ed *descriptorpb.EnumValueDescriptorProto
 	ret := &enValDescriptor{file: file, parent: parent, index: index, proto: ed, fqn: fqn}
 	r.descriptors[ed] = ret
 	return ret
+}
+
+func (e *enValDescriptor) EnumValueDescriptorProto() *descriptorpb.EnumValueDescriptorProto {
+	return e.proto
+}
+
+func (e *enValDescriptor) AsProto() proto.Message {
+	return e.proto
 }
 
 func (e *enValDescriptor) ParentFile() protoreflect.FileDescriptor {
@@ -864,6 +903,9 @@ type fldDescriptor struct {
 	fqn    string
 }
 
+var _ protoreflect.FieldDescriptor = (*fldDescriptor)(nil)
+var _ DescriptorProtoWrapper = (*fldDescriptor)(nil)
+
 func (r *result) asFieldDescriptor(fd *descriptorpb.FieldDescriptorProto, file *result, parent protoreflect.Descriptor, index int, fqn string) *fldDescriptor {
 	if ret := r.descriptors[fd]; ret != nil {
 		return ret.(*fldDescriptor)
@@ -871,6 +913,14 @@ func (r *result) asFieldDescriptor(fd *descriptorpb.FieldDescriptorProto, file *
 	ret := &fldDescriptor{file: file, parent: parent, index: index, proto: fd, fqn: fqn}
 	r.descriptors[fd] = ret
 	return ret
+}
+
+func (f *fldDescriptor) FieldDescriptorProto() *descriptorpb.FieldDescriptorProto {
+	return f.proto
+}
+
+func (f *fldDescriptor) AsProto() proto.Message {
+	return f.proto
 }
 
 func (f *fldDescriptor) ParentFile() protoreflect.FileDescriptor {
@@ -1014,11 +1064,13 @@ func (f *fldDescriptor) MapValue() protoreflect.FieldDescriptor {
 }
 
 func (f *fldDescriptor) HasDefault() bool {
-	// TODO
+	// TODO: real support for default values
 	return false
 }
 
 func (f *fldDescriptor) Default() protoreflect.Value {
+	// NB: this just returns zero value for type
+	// TODO: real support for default values
 	switch f.Kind() {
 	case protoreflect.Int32Kind, protoreflect.Sint32Kind,
 		protoreflect.Sfixed32Kind:
@@ -1054,6 +1106,8 @@ func (f *fldDescriptor) DefaultEnumValue() protoreflect.EnumValueDescriptor {
 	if ed == nil {
 		return nil
 	}
+	// NB: this just returns the first enum value for the enum type
+	// TODO: real support for default values
 	return ed.Values().Get(0)
 }
 
@@ -1136,6 +1190,9 @@ type oneofDescriptor struct {
 	fqn    string
 }
 
+var _ protoreflect.OneofDescriptor = (*oneofDescriptor)(nil)
+var _ DescriptorProtoWrapper = (*oneofDescriptor)(nil)
+
 func (r *result) asOneOfDescriptor(ood *descriptorpb.OneofDescriptorProto, file *result, parent *msgDescriptor, index int, fqn string) *oneofDescriptor {
 	if ret := r.descriptors[ood]; ret != nil {
 		return ret.(*oneofDescriptor)
@@ -1143,6 +1200,14 @@ func (r *result) asOneOfDescriptor(ood *descriptorpb.OneofDescriptorProto, file 
 	ret := &oneofDescriptor{file: file, parent: parent, index: index, proto: ood, fqn: fqn}
 	r.descriptors[ood] = ret
 	return ret
+}
+
+func (o *oneofDescriptor) OneOfDescriptorProto() *descriptorpb.OneofDescriptorProto {
+	return o.proto
+}
+
+func (o *oneofDescriptor) AsProto() proto.Message {
+	return o.proto
 }
 
 func (o *oneofDescriptor) ParentFile() protoreflect.FileDescriptor {
@@ -1178,7 +1243,8 @@ func (o *oneofDescriptor) Options() protoreflect.ProtoMessage {
 }
 
 func (o *oneofDescriptor) IsSynthetic() bool {
-	// TODO
+	// TODO: proper support for synthetic/proto3 oneof
+	o.Fields().Get(0).HasOptionalKeyword()
 	return false
 }
 
@@ -1233,6 +1299,9 @@ type svcDescriptor struct {
 	fqn   string
 }
 
+var _ protoreflect.ServiceDescriptor = (*svcDescriptor)(nil)
+var _ DescriptorProtoWrapper = (*svcDescriptor)(nil)
+
 func (r *result) asServiceDescriptor(sd *descriptorpb.ServiceDescriptorProto, file *result, index int, fqn string) *svcDescriptor {
 	if ret := r.descriptors[sd]; ret != nil {
 		return ret.(*svcDescriptor)
@@ -1240,6 +1309,14 @@ func (r *result) asServiceDescriptor(sd *descriptorpb.ServiceDescriptorProto, fi
 	ret := &svcDescriptor{file: file, index: index, proto: sd, fqn: fqn}
 	r.descriptors[sd] = ret
 	return ret
+}
+
+func (s *svcDescriptor) ServiceDescriptorProto() *descriptorpb.ServiceDescriptorProto {
+	return s.proto
+}
+
+func (s *svcDescriptor) AsProto() proto.Message {
+	return s.proto
 }
 
 func (s *svcDescriptor) ParentFile() protoreflect.FileDescriptor {
@@ -1321,6 +1398,9 @@ type mtdDescriptor struct {
 	fqn    string
 }
 
+var _ protoreflect.MethodDescriptor = (*mtdDescriptor)(nil)
+var _ DescriptorProtoWrapper = (*mtdDescriptor)(nil)
+
 func (r *result) asMethodDescriptor(mtd *descriptorpb.MethodDescriptorProto, file *result, parent *svcDescriptor, index int, fqn string) *mtdDescriptor {
 	if ret := r.descriptors[mtd]; ret != nil {
 		return ret.(*mtdDescriptor)
@@ -1328,6 +1408,14 @@ func (r *result) asMethodDescriptor(mtd *descriptorpb.MethodDescriptorProto, fil
 	ret := &mtdDescriptor{file: file, parent: parent, index: index, proto: mtd, fqn: fqn}
 	r.descriptors[mtd] = ret
 	return ret
+}
+
+func (m *mtdDescriptor) MethodDescriptorProto() *descriptorpb.MethodDescriptorProto {
+	return m.proto
+}
+
+func (m *mtdDescriptor) AsProto() proto.Message {
+	return m.proto
 }
 
 func (m *mtdDescriptor) ParentFile() protoreflect.FileDescriptor {

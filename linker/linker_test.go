@@ -662,6 +662,37 @@ func TestLinkerValidation(t *testing.T) {
 			},
 			`foo.proto:7:34: message Baz: option (foo).baz.options.(foo).buzz.name: oneof "bar" already has field "baz" set`,
 		},
+		{
+			map[string]string{
+				"a.proto": "syntax = \"proto3\";\n" +
+					"message m{\n" +
+					"  oneof z{\n" +
+					"    int64 z=1;\n" +
+					"  }\n" +
+					"}",
+			},
+			`a.proto:4:11: symbol "m.z" already defined at a.proto:3:9`,
+		},
+		{
+			map[string]string{
+				"a.proto": "syntax=\"proto3\";\n" +
+					"message m{\n" +
+					"  string z = 1;\n" +
+					"  oneof z{int64 b=2;}\n" +
+					"}",
+			},
+			`a.proto:4:9: symbol "m.z" already defined at a.proto:3:10`,
+		},
+		{
+			map[string]string{
+				"a.proto": "syntax=\"proto3\";\n" +
+					"message m{\n" +
+					"  oneof z{int64 a=1;}\n" +
+					"  oneof z{int64 b=2;}\n" +
+					"}",
+			},
+			`a.proto:4:9: symbol "m.z" already defined at a.proto:3:9`,
+		},
 	}
 
 	for i, tc := range testCases {

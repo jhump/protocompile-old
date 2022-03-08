@@ -14,7 +14,7 @@ import (
 // however may be expensive (to re-create a proto) and even lossy.
 func ProtoFromFileDescriptor(f protoreflect.FileDescriptor) *descriptorpb.FileDescriptorProto {
 	if res, ok := f.(linker.Result); ok {
-		return res.Proto()
+		return res.FileDescriptorProto()
 	}
 	return protodesc.ToFileDescriptorProto(f)
 }

@@ -22,7 +22,7 @@ func TestEmptyParse(t *testing.T) {
 	assert.Nil(t, err)
 	result, err := ResultFromAST(ast, true, errHandler)
 	assert.Nil(t, err)
-	fd := result.Proto()
+	fd := result.FileDescriptorProto()
 	assert.Equal(t, "foo.proto", fd.GetName())
 	assert.Equal(t, 0, len(fd.GetDependency()))
 	assert.Equal(t, 0, len(fd.GetMessageType()))
@@ -56,7 +56,7 @@ func TestSimpleParse(t *testing.T) {
 	// below, where we parse *and* link.)
 	res, err := parseFileForTest("../internal/testprotos/desc_test1.proto")
 	if assert.Nil(t, err, "%v", err) {
-		fd := res.Proto()
+		fd := res.FileDescriptorProto()
 		assert.Equal(t, "../internal/testprotos/desc_test1.proto", fd.GetName())
 		assert.Equal(t, "testprotos", fd.GetPackage())
 		assert.True(t, hasExtension(fd, "xtm"))
@@ -66,7 +66,7 @@ func TestSimpleParse(t *testing.T) {
 
 	res, err = parseFileForTest("../internal/testprotos/desc_test2.proto")
 	if assert.Nil(t, err, "%v", err) {
-		fd := res.Proto()
+		fd := res.FileDescriptorProto()
 		assert.Equal(t, "../internal/testprotos/desc_test2.proto", fd.GetName())
 		assert.Equal(t, "testprotos", fd.GetPackage())
 		assert.True(t, hasExtension(fd, "groupx"))
@@ -77,7 +77,7 @@ func TestSimpleParse(t *testing.T) {
 
 	res, err = parseFileForTest("../internal/testprotos/desc_test_defaults.proto")
 	if assert.Nil(t, err, "%v", err) {
-		fd := res.Proto()
+		fd := res.FileDescriptorProto()
 		assert.Equal(t, "../internal/testprotos/desc_test_defaults.proto", fd.GetName())
 		assert.Equal(t, "testprotos", fd.GetPackage())
 		assert.True(t, hasMessage(fd, "PrimitiveDefaults"))
@@ -86,7 +86,7 @@ func TestSimpleParse(t *testing.T) {
 
 	res, err = parseFileForTest("../internal/testprotos/desc_test_field_types.proto")
 	if assert.Nil(t, err, "%v", err) {
-		fd := res.Proto()
+		fd := res.FileDescriptorProto()
 		assert.Equal(t, "../internal/testprotos/desc_test_field_types.proto", fd.GetName())
 		assert.Equal(t, "testprotos", fd.GetPackage())
 		assert.True(t, hasEnum(fd, "TestEnum"))
@@ -96,7 +96,7 @@ func TestSimpleParse(t *testing.T) {
 
 	res, err = parseFileForTest("../internal/testprotos/desc_test_options.proto")
 	if assert.Nil(t, err, "%v", err) {
-		fd := res.Proto()
+		fd := res.FileDescriptorProto()
 		assert.Equal(t, "../internal/testprotos/desc_test_options.proto", fd.GetName())
 		assert.Equal(t, "testprotos", fd.GetPackage())
 		assert.True(t, hasExtension(fd, "mfubar"))
@@ -107,7 +107,7 @@ func TestSimpleParse(t *testing.T) {
 
 	res, err = parseFileForTest("../internal/testprotos/desc_test_proto3.proto")
 	if assert.Nil(t, err, "%v", err) {
-		fd := res.Proto()
+		fd := res.FileDescriptorProto()
 		assert.Equal(t, "../internal/testprotos/desc_test_proto3.proto", fd.GetName())
 		assert.Equal(t, "testprotos", fd.GetPackage())
 		assert.True(t, hasEnum(fd, "Proto3Enum"))
@@ -117,7 +117,7 @@ func TestSimpleParse(t *testing.T) {
 
 	res, err = parseFileForTest("../internal/testprotos/desc_test_wellknowntypes.proto")
 	if assert.Nil(t, err, "%v", err) {
-		fd := res.Proto()
+		fd := res.FileDescriptorProto()
 		assert.Equal(t, "../internal/testprotos/desc_test_wellknowntypes.proto", fd.GetName())
 		assert.Equal(t, "testprotos", fd.GetPackage())
 		assert.True(t, hasMessage(fd, "TestWellKnownTypes"))
@@ -126,7 +126,7 @@ func TestSimpleParse(t *testing.T) {
 
 	res, err = parseFileForTest("../internal/testprotos/nopkg/desc_test_nopkg.proto")
 	if assert.Nil(t, err, "%v", err) {
-		fd := res.Proto()
+		fd := res.FileDescriptorProto()
 		assert.Equal(t, "../internal/testprotos/nopkg/desc_test_nopkg.proto", fd.GetName())
 		assert.Equal(t, "", fd.GetPackage())
 		protos[fd.GetName()] = res
@@ -134,7 +134,7 @@ func TestSimpleParse(t *testing.T) {
 
 	res, err = parseFileForTest("../internal/testprotos/nopkg/desc_test_nopkg_new.proto")
 	if assert.Nil(t, err, "%v", err) {
-		fd := res.Proto()
+		fd := res.FileDescriptorProto()
 		assert.Equal(t, "../internal/testprotos/nopkg/desc_test_nopkg_new.proto", fd.GetName())
 		assert.Equal(t, "", fd.GetPackage())
 		assert.True(t, hasMessage(fd, "TopLevel"))
@@ -143,7 +143,7 @@ func TestSimpleParse(t *testing.T) {
 
 	res, err = parseFileForTest("../internal/testprotos/pkg/desc_test_pkg.proto")
 	if assert.Nil(t, err, "%v", err) {
-		fd := res.Proto()
+		fd := res.FileDescriptorProto()
 		assert.Equal(t, "../internal/testprotos/pkg/desc_test_pkg.proto", fd.GetName())
 		assert.Equal(t, "jhump.protocompile.test", fd.GetPackage())
 		assert.True(t, hasEnum(fd, "Foo"))
@@ -209,7 +209,7 @@ func TestAggregateValueInUninterpretedOptions(t *testing.T) {
 	if !assert.Nil(t, err) {
 		t.FailNow()
 	}
-	fd := res.Proto()
+	fd := res.FileDescriptorProto()
 
 	aggregateValue1 := *fd.Service[0].Method[0].Options.UninterpretedOption[0].AggregateValue
 	assert.Equal(t, "{ authenticated: true permission{ action: LOGIN entity: \"client\" } }", aggregateValue1)
