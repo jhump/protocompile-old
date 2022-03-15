@@ -1,0 +1,25 @@
+syntax = "proto2";
+
+package testprotos;
+
+import "google/protobuf/descriptor.proto";
+
+extend google.protobuf.FieldOptions {
+  // Leading comment on custom.
+  optional int32 custom = 20000;
+}
+
+message Foo {
+  // Leading comment on one.
+  optional string one = 1 [
+    // Leading comment on deprecated.
+    deprecated = true,
+    // Leading comment on (custom).
+    (custom) = 2
+  ];
+
+  // Leading comment on two.
+  optional string two = 2;
+  // Leading comment on three.
+  optional string three = 3;
+}
