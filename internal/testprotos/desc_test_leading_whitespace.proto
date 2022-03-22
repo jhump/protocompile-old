@@ -1,0 +1,12 @@
+syntax = "proto2";
+
+// Foo has no leading whitespace.
+message Foo {};
+
+// Baz also doesn't even though it has two
+// leading comments.
+message Bar {};
+
+// Baz does because it has a C-style comment.
+/* Like this. */
+message Baz {};
