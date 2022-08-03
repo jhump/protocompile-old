@@ -181,12 +181,13 @@ func flattenNode(f *ast.FileNode, n ast.Node, buf *bytes.Buffer) {
 		for _, ch := range cn.Children() {
 			flattenNode(f, ch, buf)
 		}
-	} else {
-		if buf.Len() > 0 {
-			buf.WriteRune(' ')
-		}
-		buf.WriteString(f.NodeInfo(n).RawText())
+		return
 	}
+
+	if buf.Len() > 0 {
+		buf.WriteRune(' ')
+	}
+	buf.WriteString(f.NodeInfo(n).RawText())
 }
 
 func (r *result) asUninterpretedOptionName(parts []*ast.FieldReferenceNode) []*descriptorpb.UninterpretedOption_NamePart {
