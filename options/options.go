@@ -398,6 +398,7 @@ func (interp *interpreter) interpretEnumOptions(fqn string, ed *descriptorpb.Enu
 // of the source (the way the options are de-structured and the order in
 // which options appear).
 type interpretedOption struct {
+	extension  bool
 	pathPrefix []int32
 	interpretedField
 }
@@ -639,6 +640,7 @@ func (interp *interpreter) interpretOptions(fqn string, element, opts proto.Mess
 			}
 			return nil, err
 		}
+		res.extension = uo.Name[0].GetIsExtension()
 		results = append(results, res)
 		if optn, ok := node.(*ast.OptionNode); ok {
 			interp.index[optn] = res.path()
@@ -707,6 +709,17 @@ func cloneInto(dest proto.Message, src proto.Message, res linker.Resolver) error
 }
 
 func toOptionBytes(results []*interpretedOption) []byte {
+	// protoc emits non-custom options in tag order and then
+	// the rest are emitted in the order they are defined in source
+	sort.SliceStable(results, func(i, j int) bool {
+		if !results[i].extension && results[j].extension {
+			return true
+		}
+		if !results[i].extension && !results[j].extension {
+			return results[i].number < results[j].number
+		}
+		return false
+	})
 	var b []byte
 	for _, res := range results {
 		b = res.appendOptionBytes(b)

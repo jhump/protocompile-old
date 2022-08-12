@@ -250,7 +250,7 @@ func (r *result) storeOptionBytesInMessage(md, origMd *descriptorpb.DescriptorPr
 	}
 
 	for i, exr := range md.ExtensionRange {
-		origExr := origMd.Extension[i]
+		origExr := origMd.ExtensionRange[i]
 		if exr.Options != nil {
 			exr.Options.Reset()
 			exr.Options.ProtoReflect().SetUnknown(r.optionBytes[origExr.Options])
