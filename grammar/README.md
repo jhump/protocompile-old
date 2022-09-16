@@ -1,3 +1,9 @@
+# NOTICE
+
+### This repo is archived. For the latest content related to a comprehensive grammar and spec for the protobuf language, please see https://protobuf.com (the contents of which are also in [a git repo](https://github.com/bufbuild/protobuf.com)).
+
+----
+
 # Introduction
 This is a specification for the syntax of the Protocol Buffer IDL
 (Interface Definition Language). Protocol Buffer is also known by the
